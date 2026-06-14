@@ -8,6 +8,9 @@
   --line-strong: rgba(22, 22, 22, 0.78);
   --accent: #e7dfd0;
   --accent-strong: #d8ccb7;
+  /* A calm, desaturated blue — used only for genuine links. See
+     new_features/PRD.md §9 for why this single exception to the no-blue rule. */
+  --link: #3f5d8a;
   --shadow: 0 24px 60px rgba(18, 18, 18, 0.08);
   --radius-xl: 28px;
   --radius-lg: 20px;
@@ -137,6 +140,18 @@ textarea {
   color: var(--muted);
 }
 
+/* The hero "Filum" is the wordmark — large and bold. */
+.eyebrow.brand-mark {
+  margin: 0 0 8px;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  font-size: clamp(2.4rem, 5vw, 3.4rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+  text-transform: none;
+  color: var(--ink);
+}
+
 h1,
 h2,
 h3 {
@@ -146,14 +161,15 @@ h3 {
   line-height: 0.98;
 }
 
-/* Hero tagline restyle: a quiet, wide horizontal band — not a billboard. */
+/* Hero tagline: a quiet, thin sub-line under the wordmark — kept small so the
+   wordmark leads and both stay above the fold. */
 .hero h1 {
-  font-size: clamp(1.5rem, 2.4vw, 2.1rem);
+  font-size: clamp(0.95rem, 1.7vw, 1.2rem);
   font-weight: 300;
-  letter-spacing: 0.16em;
-  line-height: 1.5;
-  max-width: none;
-  margin-top: 4px;
+  letter-spacing: 0.12em;
+  line-height: 1.45;
+  max-width: 48ch;
+  margin-top: 2px;
 }
 
 h2 {
@@ -495,75 +511,18 @@ input.is-invalid {
 
 /* ---- Visualizations ------------------------------------------------- */
 
-.viz-card {
-  position: relative;
-}
-
-.tangle-stage,
 .linear-stage {
   position: relative;
   border-radius: 24px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 241, 230, 0.88)),
     radial-gradient(circle at center, rgba(255, 255, 255, 0.8), transparent 56%);
-  min-height: 420px;
-  overflow: visible;
 }
 
-.tangle-stage {
-  overflow: hidden;
-}
-
-.tangle-stage::after {
-  /* nothing — placeholder so hover-card overflow handling stays predictable */
-  content: "";
-  display: none;
-}
-
-#tangleSvg,
 #lineSvg {
   width: 100%;
   height: 100%;
   display: block;
-}
-
-.node-layer {
-  position: absolute;
-  inset: 0;
-}
-
-.task-node {
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  border: 0;
-  background: #101010;
-  box-shadow: 0 0 0 7px rgba(16, 16, 16, 0.04);
-  cursor: pointer;
-  transition:
-    transform 160ms ease,
-    box-shadow 160ms ease;
-}
-
-.task-node:hover,
-.task-node.is-active,
-.task-node:focus-visible {
-  transform: scale(1.4);
-  box-shadow: 0 0 0 10px rgba(16, 16, 16, 0.1);
-  outline: none;
-}
-
-.hover-card {
-  position: absolute;
-  width: min(280px, calc(100% - 24px));
-  padding: 16px;
-  border-radius: 18px;
-  background: rgba(255, 252, 248, 0.98);
-  border: 1px solid var(--line);
-  box-shadow: 0 18px 40px rgba(17, 17, 17, 0.14);
-  pointer-events: none;
-  z-index: 2;
 }
 
 /* ---- Step 3 planning list ------------------------------------------ */
@@ -690,6 +649,279 @@ input.is-invalid {
   letter-spacing: 0.08em;
 }
 
+.focus-card-head {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.focus-notes {
+  margin-top: 4px;
+}
+
+.focus-notes-empty {
+  color: var(--muted);
+}
+
+/* ---- Edit affordance, links, attachments --------------------------- */
+
+.task-chip-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.task-chip-head strong {
+  margin-bottom: 0;
+}
+
+/* Quiet inline "Edit" / "Close" control. */
+.mini-edit {
+  flex: none;
+  padding: 4px 12px;
+  font-size: 0.76rem;
+  border-radius: 999px;
+}
+
+/* Links inside notes — the one place colour is allowed. */
+.rich-link {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  overflow-wrap: anywhere;
+}
+
+.rich-link:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* Read-only thumbnail strips inside chips / plan items. */
+.thumb-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.thumb {
+  display: block;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.thumb--xs {
+  width: 38px;
+  height: 38px;
+}
+
+.thumb--lg {
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+  max-height: 200px;
+}
+
+.thumb-more {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* Editable attachment tray (capture form + edit modal). */
+.attach-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.attach-button {
+  flex: none;
+  padding: 8px 14px;
+  font-size: 0.82rem;
+}
+
+.attach-row .field-hint {
+  margin-top: 0;
+}
+
+.attachment-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.attachment-tray[hidden] {
+  display: none;
+}
+
+.attachment {
+  position: relative;
+  width: 76px;
+  height: 76px;
+}
+
+.attachment .thumb {
+  width: 76px;
+  height: 76px;
+}
+
+.thumb-remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 252, 246, 0.98);
+  color: var(--ink);
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(17, 17, 17, 0.12);
+  transition: transform 180ms ease, background-color 180ms ease;
+}
+
+.thumb-remove:hover {
+  transform: translateY(-1px);
+  background: var(--accent);
+}
+
+.attachment-tray--read {
+  margin-top: 16px;
+}
+
+.attachment-link {
+  display: inline-block;
+  border-radius: 12px;
+  transition: transform 180ms ease;
+}
+
+.attachment-link:hover {
+  transform: translateY(-2px);
+}
+
+.danger-ghost {
+  color: var(--muted);
+}
+
+.danger-ghost:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+/* ---- In-place task editor ------------------------------------------ */
+/* The editor renders right where the task sits — no modal, no overlay. */
+
+.inline-editor {
+  display: block;
+  padding: 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.72);
+  animation: rise 220ms ease;
+}
+
+.inline-field {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.inline-field > span,
+.inline-time > span {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.inline-editor input,
+.inline-editor select,
+.inline-editor textarea {
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.inline-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.inline-attach-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.inline-time {
+  display: block;
+  flex: 1 1 120px;
+  max-width: 180px;
+}
+
+.inline-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.inline-actions-right {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.inline-actions .primary-button,
+.inline-actions .ghost-button {
+  padding: 8px 16px;
+}
+
+/* When a task is in edit mode, its read-view box gives the editor full room. */
+.task-chip--editing,
+.plan-item--editing {
+  display: block;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.focus-editor {
+  width: 100%;
+}
+
+.focus-editor[hidden] {
+  display: none;
+}
+
+/* During the untangle, the ordered cards are held back, then fade in over the
+   thread as it settles into place. */
+.linear-list {
+  transition: opacity 320ms ease;
+}
+
+.is-untangling .linear-list {
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* ---- Empty states & helpers ---------------------------------------- */
 
 .empty-state {
@@ -789,5 +1021,25 @@ input.is-invalid {
     pointer-events: none;
     background: linear-gradient(90deg, rgba(247, 241, 230, 0), rgba(247, 241, 230, 0.9));
     display: block;
+  }
+
+  .inline-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-actions {
+    align-items: stretch;
+  }
+}
+
+/* Calm by default; honor an explicit request for reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  .panel.is-active,
+  .inline-editor,
+  .mini-node--enter {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }

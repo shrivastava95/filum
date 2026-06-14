@@ -98,7 +98,9 @@ async function readJsonBody(req) {
     let total = 0;
     req.on("data", (chunk) => {
       total += chunk.length;
-      if (total > 2 * 1024 * 1024) {
+      // Raised from 2 MB to fit a couple of inline image references (data URLs)
+      // attached to tasks. See new_features/PRD.md §5.
+      if (total > 8 * 1024 * 1024) {
         reject(new Error("body too large"));
         req.destroy();
         return;

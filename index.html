@@ -27,7 +27,7 @@
 
       <header class="hero">
         <div>
-          <p class="eyebrow">Filum</p>
+          <p class="eyebrow brand-mark">Filum</p>
           <h1>From a tangle of tasks to one calm thread.</h1>
           <p class="intro">
             Named for the Latin word for thread. Collect what is swirling,
@@ -43,7 +43,6 @@
 
       <nav class="stepper" aria-label="Progress">
         <button class="step is-active" data-step-target="capture">Gather</button>
-        <button class="step" data-step-target="tangle">See The Knot</button>
         <button class="step" data-step-target="plan">Order</button>
         <button class="step" data-step-target="line">Follow The Thread</button>
       </nav>
@@ -109,11 +108,18 @@
               <textarea
                 id="taskNotes"
                 name="taskNotes"
-                rows="3"
-                maxlength="220"
-                placeholder="Can wait until afternoon, blocked by review, 20 minutes, call someone first..."
+                rows="5"
+                maxlength="2000"
+                placeholder="Drop everything here — context, a link to the doc, who to call, why it is blocked. Paste an image straight in for reference."
               ></textarea>
             </label>
+
+            <div class="attach-row">
+              <button id="captureAddImageButton" class="ghost-button attach-button" type="button">Add image</button>
+              <input id="captureImageInput" class="visually-hidden" type="file" accept="image/*" multiple />
+              <small class="field-hint">Links turn blue automatically. Images stay local in this thread.</small>
+            </div>
+            <div id="captureAttachments" class="attachment-tray" aria-live="polite"></div>
 
             <div class="form-actions">
               <button class="primary-button" type="submit">Add task</button>
@@ -126,8 +132,8 @@
           <aside class="capture-aside">
             <div class="mini-thread-wrap">
               <svg id="miniThreadSvg" viewBox="0 0 220 180" role="img" aria-labelledby="miniThreadTitle miniThreadDesc">
-                <title id="miniThreadTitle">A small preview of your thread</title>
-                <desc id="miniThreadDesc">Each circle is a task you have gathered; the rightmost is the most recent.</desc>
+                <title id="miniThreadTitle">A small preview of your knot</title>
+                <desc id="miniThreadDesc">Each dark node is a task you have gathered; the thread grows more tangled as you add more.</desc>
               </svg>
             </div>
             <div class="capture-meta">
@@ -138,34 +144,10 @@
           </aside>
         </section>
 
-        <section class="panel" data-step="tangle">
-          <div class="panel-header">
-            <div>
-              <p class="section-label">Step 2</p>
-              <h2>Your knot, all in one place</h2>
-            </div>
-            <button id="toPlanButton" class="primary-button" type="button">Start ordering</button>
-          </div>
-
-          <div class="viz-card">
-            <div class="viz-copy">
-              <p>
-                Every black node is one task. Move your cursor across the knot
-                to inspect each piece without trying to hold it all in your head.
-              </p>
-            </div>
-            <div class="tangle-stage">
-              <svg id="tangleSvg" viewBox="0 0 640 420" role="img" aria-labelledby="tangleTitle tangleDesc"></svg>
-              <div id="tangleNodes" class="node-layer"></div>
-              <div id="hoverCard" class="hover-card" hidden></div>
-            </div>
-          </div>
-        </section>
-
         <section class="panel" data-step="plan">
           <div class="panel-header">
             <div>
-              <p class="section-label">Step 3</p>
+              <p class="section-label">Step 2</p>
               <h2>Choose the order</h2>
             </div>
             <button id="toLineButton" class="primary-button" type="button">Untangle it</button>
@@ -183,7 +165,7 @@
         <section class="panel" data-step="line">
           <div class="panel-header">
             <div>
-              <p class="section-label">Step 4</p>
+              <p class="section-label">Step 3</p>
               <h2>The clear thread</h2>
             </div>
             <div class="focus-nav">
@@ -193,10 +175,15 @@
           </div>
 
           <div class="focus-card">
-            <p class="focus-label">Do this now</p>
+            <div class="focus-card-head">
+              <p class="focus-label">Do this now</p>
+              <button id="focusEditButton" class="ghost-button mini-edit" type="button" hidden>Edit</button>
+            </div>
             <h3 id="focusTitle">Nothing yet</h3>
             <p id="focusMeta" class="focus-meta"></p>
-            <p id="focusNotes" class="focus-notes"></p>
+            <div id="focusNotes" class="focus-notes"></div>
+            <div id="focusAttachments" class="attachment-tray attachment-tray--read"></div>
+            <div id="focusEditor" class="focus-editor" hidden></div>
           </div>
 
           <div class="linear-stage">
