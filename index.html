@@ -12,6 +12,9 @@
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <title>Filum</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+      window.__FILUM_BASE_PATH__ = window.location.pathname.startsWith("/filum") ? "/filum" : "";
+    </script>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>

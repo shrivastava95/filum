@@ -109,11 +109,18 @@ const vaultState = {
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 const VAULT_SALT_KEY = "filum-vault-salt-v1";
-const VAULT_UNLOCK_KEY = "filum-vault-unlocked-v1";
+const BASE_PATH =
+  typeof window !== "undefined" && typeof window.__FILUM_BASE_PATH__ === "string"
+    ? window.__FILUM_BASE_PATH__.replace(/\/$/, "")
+    : "";
+
+function appPath(pathname) {
+  return `${BASE_PATH}${pathname}`;
+}
 
 const storage = {
   async listThreads() {
-    const res = await fetch("/api/threads", { headers: { accept: "application/json" } });
+    const res = await fetch(appPath("/api/threads"), { headers: { accept: "application/json" } });
     if (!res.ok) throw new Error(`list failed: ${res.status}`);
     const threads = await res.json();
     if (!authState.enabled) return threads;
@@ -122,14 +129,14 @@ const storage = {
     );
   },
   async loadThread(id) {
-    const res = await fetch(`/api/threads/${encodeURIComponent(id)}`);
+    const res = await fetch(appPath(`/api/threads/${encodeURIComponent(id)}`));
     if (!res.ok) throw new Error(`load failed: ${res.status}`);
     const thread = await res.json();
     return authState.enabled ? decryptThreadEnvelope(thread) : thread;
   },
   async createThread(name, threadState) {
     const payload = authState.enabled ? await encryptThreadState(name, threadState) : { name, state: threadState };
-    const res = await fetch("/api/threads", {
+    const res = await fetch(appPath("/api/threads"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(authState.enabled ? payload : { name, state: threadState }),
@@ -140,7 +147,7 @@ const storage = {
   },
   async saveThread(thread) {
     const payload = authState.enabled ? await encryptThreadState(thread.name, thread.state) : { name: thread.name, state: thread.state };
-    const res = await fetch(`/api/threads/${encodeURIComponent(thread.id)}`, {
+    const res = await fetch(appPath(`/api/threads/${encodeURIComponent(thread.id)}`), {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(
@@ -183,16 +190,12 @@ async function initializeApp() {
 }
 
 async function loadAuthConfig() {
-  const res = await fetch("/api/config", { headers: { accept: "application/json" } });
+  const res = await fetch(appPath("/api/config"), { headers: { accept: "application/json" } });
   if (!res.ok) throw new Error(`config failed: ${res.status}`);
   const config = await res.json();
   authState.enabled = Boolean(config.authEnabled);
   authState.googleClientId = config.googleClientId || null;
   authState.user = config.user || null;
-  if (authState.enabled && sessionStorage.getItem(VAULT_UNLOCK_KEY) === "1") {
-    vaultState.unlocked = true;
-    vaultState.salt = loadVaultSalt();
-  }
 }
 
 function loadVaultSalt() {
@@ -329,6 +332,14 @@ function showVaultScreen() {
   if (document.querySelector(".app-shell")) document.querySelector(".app-shell").hidden = true;
 }
 
+function requireVaultUnlocked(actionLabel) {
+  if (!authState.enabled || vaultState.key) return true;
+  showVaultScreen();
+  bindVaultEvents();
+  setAuthMessage(actionLabel || "Unlock your vault to continue.");
+  return false;
+}
+
 async function renderGoogleSignIn() {
   if (!elements.googleSignInButton) return;
   if (!authState.googleClientId) {
@@ -378,7 +389,7 @@ function waitForGoogleLibrary() {
 
 async function handleGoogleCredential(response) {
   try {
-    const res = await fetch("/auth/google", {
+    const res = await fetch(appPath("/auth/google"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ credential: response.credential }),
@@ -416,21 +427,19 @@ async function handleVaultUnlock(event) {
   vaultState.salt = salt;
   vaultState.unlocked = true;
   vaultState.unlockedAt = new Date().toISOString();
-  sessionStorage.setItem(VAULT_UNLOCK_KEY, "1");
   hideAuthScreen();
   await bootstrapWorkspace();
 }
 
 async function handleSignOut() {
   try {
-    await fetch("/auth/logout", { method: "POST" });
+    await fetch(appPath("/auth/logout"), { method: "POST" });
   } catch (err) {
     console.warn("[filum] sign-out failed:", err);
   } finally {
     authState.user = null;
     vaultState.unlocked = false;
     vaultState.key = null;
-    sessionStorage.removeItem(VAULT_UNLOCK_KEY);
     applyAuthUiState();
     showAuthScreen();
     await renderGoogleSignIn();
@@ -809,6 +818,7 @@ async function openThreadById(id) {
     closeThreadMenu();
     return;
   }
+  if (!requireVaultUnlocked("Unlock your vault to open threads.")) return;
   closeThreadMenu();
   await flushPersistImmediate();
   try {
@@ -856,6 +866,7 @@ function hideRenameInput() {
 }
 
 async function handleNewThread() {
+  if (!requireVaultUnlocked("Unlock your vault to create a new thread.")) return;
   await flushPersistImmediate(); // autosave already persists; save current silently
   try {
     const thread = await storage.createThread("Untitled thread", emptyStateObject());
@@ -932,7 +943,7 @@ function flushPersistOnUnload() {
   });
   // keepalive PUT is the reliable cross-browser path for unload writes.
   try {
-    fetch(`/api/threads/${encodeURIComponent(state.threadId)}`, {
+    fetch(appPath(`/api/threads/${encodeURIComponent(state.threadId)}`), {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body,
@@ -1846,7 +1857,8 @@ function playUntangle() {
 function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js").catch(() => {});
+      const swPath = BASE_PATH ? `${BASE_PATH}/sw.js` : "./sw.js";
+      navigator.serviceWorker.register(swPath).catch(() => {});
     });
   }
 }
