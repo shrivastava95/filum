@@ -36,6 +36,10 @@ body {
   color: var(--ink);
 }
 
+body.is-auth-locked {
+  overflow: hidden;
+}
+
 button,
 input,
 select,
@@ -61,6 +65,56 @@ textarea {
   padding: 24px 0 56px;
 }
 
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.88), transparent 32%),
+    radial-gradient(circle at right center, rgba(231, 223, 208, 0.84), transparent 28%),
+    linear-gradient(180deg, #f8f4ed 0%, var(--bg) 100%);
+  z-index: 60;
+}
+
+.vault-form {
+  margin-top: 18px;
+}
+
+.vault-form label span {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.auth-screen[hidden] {
+  display: none;
+}
+
+.auth-card {
+  width: min(560px, 100%);
+  padding: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  border-radius: var(--radius-xl);
+  background: rgba(255, 252, 246, 0.78);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
+}
+
+.google-button-slot {
+  margin-top: 20px;
+  min-height: 48px;
+}
+
+.auth-footnote {
+  margin: 18px 0 0;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
 /* ---- Thread bar (Save / New / switcher) ----------------------------- */
 
 .thread-bar {
@@ -78,6 +132,22 @@ textarea {
   backdrop-filter: blur(8px);
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+.session-panel {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.account-label {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-size: 0.82rem;
 }
 
 /* ---- Saved-threads dropdown + inline rename ----------------------- */

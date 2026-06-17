@@ -111,6 +111,24 @@ You can combine custom port and custom storage:
 FILUM_PORT=8080 FILUM_THREADS_DIR=~/Documents/filum-threads node server.js
 ```
 
+## Optional: Google sign-in and encrypted server storage
+
+If you want user accounts, set these environment variables before starting the server:
+
+```bash
+GOOGLE_CLIENT_ID=your-google-oauth-client-id
+FILUM_MASTER_KEY=$(openssl rand -base64 32)
+node server.js
+```
+
+When `GOOGLE_CLIENT_ID` is set, Filum switches to account mode:
+
+- users sign in with Google only
+- each account gets its own thread store
+- user records and thread records are encrypted at rest on the server
+
+This protects the stored files from a simple disk or database leak. It does not make the server cryptographically safe if the running process or the host is compromised.
+
 ## Optional: create a small launcher script
 
 From inside the repo:

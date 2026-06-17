@@ -11,9 +11,46 @@
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <title>Filum</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div id="authScreen" class="auth-screen" hidden>
+      <section class="auth-card" aria-labelledby="authTitle">
+        <p class="eyebrow brand-mark">Filum</p>
+        <h1 id="authTitle">Sign in with Google to open your threads.</h1>
+        <p class="intro">
+          Accounts are tied to Google sign-in only. Your threads live on the server in encrypted form and stay scoped to your account.
+        </p>
+        <div id="googleSignInButton" class="google-button-slot" aria-label="Sign in with Google"></div>
+        <p class="auth-footnote">
+          You will be signed in through Google Identity Services. Filum never stores your Google password.
+        </p>
+      </section>
+    </div>
+
+    <div id="vaultScreen" class="auth-screen" hidden>
+      <section class="auth-card" aria-labelledby="vaultTitle">
+        <p class="eyebrow brand-mark">Filum Vault</p>
+        <h1 id="vaultTitle">Unlock your thread vault.</h1>
+        <p class="intro">
+          This passphrase never leaves your browser. Filum uses it to encrypt your thread data before anything is sent to the server.
+        </p>
+        <form id="vaultForm" class="vault-form">
+          <label>
+            <span>Passphrase</span>
+            <input id="vaultPassphrase" type="password" autocomplete="current-password" minlength="8" placeholder="Use a strong passphrase" required />
+          </label>
+          <div class="form-actions">
+            <button class="primary-button" type="submit">Unlock vault</button>
+          </div>
+        </form>
+        <p class="auth-footnote">
+          Without this passphrase, the server only has ciphertext.
+        </p>
+      </section>
+    </div>
+
     <div class="app-shell">
       <div class="thread-bar" role="toolbar" aria-label="Thread controls">
         <div class="thread-menu">
@@ -29,6 +66,10 @@
         <button id="saveThreadButton" class="ghost-button thread-button" type="button">Rename</button>
         <button id="newThreadButton" class="ghost-button thread-button" type="button">Start new thread</button>
         <span id="threadStatus" class="thread-status" aria-live="polite"></span>
+        <div id="sessionPanel" class="session-panel" hidden>
+          <span id="accountLabel" class="account-label"></span>
+          <button id="signOutButton" class="ghost-button thread-button" type="button">Sign out</button>
+        </div>
       </div>
 
       <header class="hero">

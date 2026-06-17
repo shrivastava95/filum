@@ -23,6 +23,8 @@ let threadList = [];
 let isDirty = false;
 let isOffline = false;
 let persistTimer = null;
+let eventsBound = false;
+let authEventsBound = false;
 
 // Transient, never-persisted UI state.
 let captureImages = []; // images staged for the next captured task
@@ -44,6 +46,14 @@ const TYPE_OPTS = [
 ];
 
 const elements = {
+  authScreen: document.getElementById("authScreen"),
+  vaultScreen: document.getElementById("vaultScreen"),
+  vaultForm: document.getElementById("vaultForm"),
+  vaultPassphrase: document.getElementById("vaultPassphrase"),
+  googleSignInButton: document.getElementById("googleSignInButton"),
+  sessionPanel: document.getElementById("sessionPanel"),
+  accountLabel: document.getElementById("accountLabel"),
+  signOutButton: document.getElementById("signOutButton"),
   taskForm: document.getElementById("taskForm"),
   taskTitle: document.getElementById("taskTitle"),
   taskUrgency: document.getElementById("taskUrgency"),
@@ -82,42 +92,361 @@ const elements = {
   threadStatus: document.getElementById("threadStatus"),
 };
 
+const authState = {
+  enabled: false,
+  googleClientId: null,
+  user: null,
+};
+
+const vaultState = {
+  unlocked: false,
+  key: null,
+  salt: null,
+  iterations: 210000,
+  unlockedAt: null,
+};
+
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+const VAULT_SALT_KEY = "filum-vault-salt-v1";
+const VAULT_UNLOCK_KEY = "filum-vault-unlocked-v1";
+
 const storage = {
   async listThreads() {
     const res = await fetch("/api/threads", { headers: { accept: "application/json" } });
     if (!res.ok) throw new Error(`list failed: ${res.status}`);
-    return res.json();
+    const threads = await res.json();
+    if (!authState.enabled) return threads;
+    return Promise.all(threads.map(async (thread) => decryptThreadSummary(thread))).then((items) =>
+      items.filter(Boolean)
+    );
   },
   async loadThread(id) {
     const res = await fetch(`/api/threads/${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error(`load failed: ${res.status}`);
-    return res.json();
+    const thread = await res.json();
+    return authState.enabled ? decryptThreadEnvelope(thread) : thread;
   },
   async createThread(name, threadState) {
+    const payload = authState.enabled ? await encryptThreadState(name, threadState) : { name, state: threadState };
     const res = await fetch("/api/threads", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, state: threadState }),
+      body: JSON.stringify(authState.enabled ? payload : { name, state: threadState }),
     });
     if (!res.ok) throw new Error(`create failed: ${res.status}`);
-    return res.json();
+    const thread = await res.json();
+    return authState.enabled ? decryptThreadEnvelope(thread) : thread;
   },
   async saveThread(thread) {
+    const payload = authState.enabled ? await encryptThreadState(thread.name, thread.state) : { name: thread.name, state: thread.state };
     const res = await fetch(`/api/threads/${encodeURIComponent(thread.id)}`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: thread.name, state: thread.state }),
+      body: JSON.stringify(
+        authState.enabled
+          ? { ...payload, encrypted: true }
+          : { name: thread.name, state: thread.state }
+      ),
     });
     if (!res.ok) throw new Error(`save failed: ${res.status}`);
-    return res.json();
+    const saved = await res.json();
+    return authState.enabled ? decryptThreadEnvelope(saved) : saved;
   },
 };
 
-bootstrap();
+initializeApp();
 registerServiceWorker();
 
-async function bootstrap() {
-  bindEvents();
+async function initializeApp() {
+  try {
+    bindAuthEvents();
+    await loadAuthConfig();
+    applyAuthUiState();
+    if (authState.enabled && !authState.user) {
+      showAuthScreen();
+      await renderGoogleSignIn();
+      return;
+    }
+    if (authState.enabled && !vaultState.unlocked) {
+      showVaultScreen();
+      bindVaultEvents();
+      return;
+    }
+    hideAuthScreen();
+    await bootstrapWorkspace();
+  } catch (err) {
+    console.error("[filum] startup failed:", err);
+    showAuthScreen();
+    setAuthMessage("Filum could not start. Check the server connection.");
+  }
+}
+
+async function loadAuthConfig() {
+  const res = await fetch("/api/config", { headers: { accept: "application/json" } });
+  if (!res.ok) throw new Error(`config failed: ${res.status}`);
+  const config = await res.json();
+  authState.enabled = Boolean(config.authEnabled);
+  authState.googleClientId = config.googleClientId || null;
+  authState.user = config.user || null;
+  if (authState.enabled && sessionStorage.getItem(VAULT_UNLOCK_KEY) === "1") {
+    vaultState.unlocked = true;
+    vaultState.salt = loadVaultSalt();
+  }
+}
+
+function loadVaultSalt() {
+  try {
+    const existing = localStorage.getItem(VAULT_SALT_KEY);
+    if (existing) return existing;
+    const salt = cryptoRandomBase64(16);
+    localStorage.setItem(VAULT_SALT_KEY, salt);
+    return salt;
+  } catch {
+    return cryptoRandomBase64(16);
+  }
+}
+
+function cryptoRandomBase64(bytes) {
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  let binary = "";
+  buf.forEach((b) => {
+    binary += String.fromCharCode(b);
+  });
+  return btoa(binary);
+}
+
+async function deriveVaultKey(passphrase, saltB64, iterations) {
+  const material = await crypto.subtle.importKey(
+    "raw",
+    textEncoder.encode(passphrase),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: Uint8Array.from(atob(saltB64), (c) => c.charCodeAt(0)),
+      iterations,
+      hash: "SHA-256",
+    },
+    material,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+async function encryptThreadState(name, stateObject) {
+  if (!vaultState.key) throw new Error("vault not unlocked");
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plaintext = textEncoder.encode(JSON.stringify({ name, state: stateObject }));
+  const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, vaultState.key, plaintext);
+  return {
+    encrypted: true,
+    vault: {
+      v: 1,
+      alg: "AES-GCM",
+      kdf: "PBKDF2",
+      iterations: vaultState.iterations,
+      salt: vaultState.salt,
+      iv: btoa(String.fromCharCode(...iv)),
+      data: btoa(String.fromCharCode(...new Uint8Array(data))),
+    },
+  };
+}
+
+async function decryptThreadEnvelope(thread) {
+  if (!thread || !thread.encrypted) return thread;
+  const vault = thread.vault;
+  if (!vaultState.key || !vault || !vault.data || !vault.iv) {
+    throw new Error("vault locked");
+  }
+  const iv = Uint8Array.from(atob(vault.iv), (c) => c.charCodeAt(0));
+  const data = Uint8Array.from(atob(vault.data), (c) => c.charCodeAt(0));
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, vaultState.key, data);
+  const parsed = JSON.parse(textDecoder.decode(plaintext));
+  return {
+    ...thread,
+    name: parsed.name || thread.name || "Untitled thread",
+    state: parsed.state || emptyStateObject(),
+  };
+}
+
+async function decryptThreadSummary(thread) {
+  if (!thread) return null;
+  if (!thread.encrypted) return thread;
+  try {
+    return await decryptThreadEnvelope(thread);
+  } catch {
+    return { ...thread, name: "Locked thread" };
+  }
+}
+
+function bindAuthEvents() {
+  if (authEventsBound) return;
+  authEventsBound = true;
+  if (elements.signOutButton) {
+    elements.signOutButton.addEventListener("click", handleSignOut);
+  }
+}
+
+function bindVaultEvents() {
+  if (elements.vaultForm && !elements.vaultForm.dataset.bound) {
+    elements.vaultForm.dataset.bound = "1";
+    elements.vaultForm.addEventListener("submit", handleVaultUnlock);
+  }
+}
+
+function applyAuthUiState() {
+  const locked = authState.enabled && !authState.user;
+  document.body.classList.toggle("is-auth-locked", locked);
+  if (elements.sessionPanel) {
+    elements.sessionPanel.hidden = !authState.user;
+  }
+  if (elements.accountLabel) {
+    elements.accountLabel.textContent = authState.user
+      ? authState.user.email || authState.user.name || "Signed in"
+      : "";
+  }
+}
+
+function showAuthScreen() {
+  if (elements.authScreen) elements.authScreen.hidden = false;
+  if (document.querySelector(".app-shell")) document.querySelector(".app-shell").hidden = true;
+}
+
+function hideAuthScreen() {
+  if (elements.authScreen) elements.authScreen.hidden = true;
+  if (elements.vaultScreen) elements.vaultScreen.hidden = true;
+  if (document.querySelector(".app-shell")) document.querySelector(".app-shell").hidden = false;
+}
+
+function showVaultScreen() {
+  if (elements.vaultScreen) elements.vaultScreen.hidden = false;
+  if (document.querySelector(".app-shell")) document.querySelector(".app-shell").hidden = true;
+}
+
+async function renderGoogleSignIn() {
+  if (!elements.googleSignInButton) return;
+  if (!authState.googleClientId) {
+    elements.googleSignInButton.textContent = "Google sign-in is not configured on this server.";
+    return;
+  }
+  try {
+    await waitForGoogleLibrary();
+  } catch (err) {
+    console.warn("[filum] Google Identity Services unavailable:", err);
+    elements.googleSignInButton.textContent = "Google sign-in could not load.";
+    return;
+  }
+  if (!window.google?.accounts?.id) {
+    elements.googleSignInButton.textContent = "Google sign-in could not load.";
+    return;
+  }
+  elements.googleSignInButton.innerHTML = "";
+  window.google.accounts.id.initialize({
+    client_id: authState.googleClientId,
+    callback: handleGoogleCredential,
+  });
+  window.google.accounts.id.renderButton(elements.googleSignInButton, {
+    theme: "outline",
+    size: "large",
+    shape: "pill",
+    text: "signin_with",
+    width: 280,
+  });
+}
+
+function waitForGoogleLibrary() {
+  if (window.google?.accounts?.id) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      if (window.google?.accounts?.id) {
+        window.clearInterval(timer);
+        resolve();
+      } else if (Date.now() - started > 10000) {
+        window.clearInterval(timer);
+        reject(new Error("Google Identity Services timed out"));
+      }
+    }, 50);
+  });
+}
+
+async function handleGoogleCredential(response) {
+  try {
+    const res = await fetch("/auth/google", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ credential: response.credential }),
+    });
+    if (!res.ok) {
+      throw new Error(`sign-in failed: ${res.status}`);
+    }
+    const payload = await res.json();
+    authState.user = payload.user || null;
+    applyAuthUiState();
+    if (!vaultState.unlocked) {
+      showVaultScreen();
+      bindVaultEvents();
+      return;
+    }
+    hideAuthScreen();
+    await bootstrapWorkspace();
+  } catch (err) {
+    console.warn("[filum] Google sign-in failed:", err);
+    setAuthMessage("Google sign-in failed. Try again.");
+  }
+}
+
+async function handleVaultUnlock(event) {
+  event.preventDefault();
+  const input = elements.vaultPassphrase;
+  const passphrase = input && input.value ? input.value : "";
+  if (passphrase.length < 8) {
+    setAuthMessage("Use a longer passphrase.");
+    return;
+  }
+  const salt = loadVaultSalt();
+  const key = await deriveVaultKey(passphrase, salt, vaultState.iterations);
+  vaultState.key = key;
+  vaultState.salt = salt;
+  vaultState.unlocked = true;
+  vaultState.unlockedAt = new Date().toISOString();
+  sessionStorage.setItem(VAULT_UNLOCK_KEY, "1");
+  hideAuthScreen();
+  await bootstrapWorkspace();
+}
+
+async function handleSignOut() {
+  try {
+    await fetch("/auth/logout", { method: "POST" });
+  } catch (err) {
+    console.warn("[filum] sign-out failed:", err);
+  } finally {
+    authState.user = null;
+    vaultState.unlocked = false;
+    vaultState.key = null;
+    sessionStorage.removeItem(VAULT_UNLOCK_KEY);
+    applyAuthUiState();
+    showAuthScreen();
+    await renderGoogleSignIn();
+  }
+}
+
+function setAuthMessage(message) {
+  if (!elements.googleSignInButton) return;
+  elements.googleSignInButton.textContent = message;
+}
+
+async function bootstrapWorkspace() {
+  if (!eventsBound) {
+    bindEvents();
+    eventsBound = true;
+  }
   try {
     threadList = await storage.listThreads();
     let thread;
@@ -616,17 +945,16 @@ function flushPersistOnUnload() {
 
 function saveOfflineMirror() {
   try {
-    localStorage.setItem(
-      LOCAL_MIRROR_KEY,
-      JSON.stringify({
-        threadId: state.threadId,
-        threadName: state.threadName,
-        tasks: state.tasks,
-        currentStep: state.currentStep,
-        focusIndex: state.focusIndex,
-        mirroredAt: new Date().toISOString(),
-      })
-    );
+    if (authState.enabled) return;
+    const payload = {
+      threadId: state.threadId,
+      threadName: state.threadName,
+      tasks: state.tasks,
+      currentStep: state.currentStep,
+      focusIndex: state.focusIndex,
+      mirroredAt: new Date().toISOString(),
+    };
+    localStorage.setItem(LOCAL_MIRROR_KEY, JSON.stringify(payload));
   } catch {
     // storage may be full or disabled; ignore quietly
   }
