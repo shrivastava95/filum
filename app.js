@@ -876,7 +876,7 @@ async function handleNewThread() {
     render();
   } catch (err) {
     console.warn("[filum] create failed:", err);
-    setStatus("Could not start a new thread");
+    setStatus(`Could not start a new thread${err?.message ? `: ${err.message}` : ""}`);
   }
 }
 

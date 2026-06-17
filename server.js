@@ -543,6 +543,21 @@ async function handleApi(req, res, url) {
       return sendError(res, 401, "sign in required");
     }
     const userId = user ? user.id : null;
+    const bodyToThreadEnvelope = (body, existing) => ({
+      id: existing?.id || crypto.randomUUID(),
+      encrypted: Boolean(body.encrypted ?? existing?.encrypted),
+      name:
+        typeof body.name === "string" && body.name.trim()
+          ? body.name.trim()
+          : existing?.name || "Locked thread",
+      schemaVersion: SCHEMA_VERSION,
+      createdAt: existing?.createdAt || nowIso(),
+      updatedAt: nowIso(),
+      vault:
+        body.vault && typeof body.vault === "object"
+          ? body.vault
+          : existing?.vault || null,
+    });
 
     if (!id) {
       if (req.method === "GET") {
@@ -551,15 +566,7 @@ async function handleApi(req, res, url) {
       }
       if (req.method === "POST") {
         const body = await readJsonBody(req);
-        const thread = {
-          id: crypto.randomUUID(),
-          encrypted: Boolean(body.encrypted),
-          name: typeof body.name === "string" && body.name.trim() ? body.name.trim() : "Locked thread",
-          schemaVersion: SCHEMA_VERSION,
-          createdAt: nowIso(),
-          updatedAt: nowIso(),
-          payload: body.payload && typeof body.payload === "object" ? body.payload : null,
-        };
+        const thread = bodyToThreadEnvelope(body);
         if (AUTH_ENABLED) {
           await writeUserThread(userId, thread);
         } else {
@@ -594,18 +601,7 @@ async function handleApi(req, res, url) {
       } catch (err) {
         if (err.code !== "ENOENT") throw err;
       }
-      const thread = {
-        id,
-        name:
-          typeof body.name === "string" && body.name.trim()
-            ? body.name.trim()
-            : existing?.name || "Locked thread",
-        encrypted: Boolean(body.encrypted ?? existing?.encrypted),
-        schemaVersion: SCHEMA_VERSION,
-        createdAt: existing?.createdAt || nowIso(),
-        updatedAt: nowIso(),
-        payload: body.payload && typeof body.payload === "object" ? body.payload : existing?.payload || null,
-      };
+      const thread = bodyToThreadEnvelope(body, { ...existing, id });
       if (AUTH_ENABLED) {
         await writeUserThread(userId, thread);
       } else {
